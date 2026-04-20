@@ -1,0 +1,30 @@
+# CMake
+build/
+build_Release/
+build_Debug/
+out/
+bin/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+*.cmake
+
+# Executables
+*.exe
+*.out
+*.app
+
+# IDE
+.vscode/
+
+# Logs
+*.log
+logs/
+
+# SQlite
+*.db
+*.csv
+
+# Dependencies (downloaded by CMake)
+_deps/
+external/

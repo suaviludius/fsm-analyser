@@ -1,0 +1,125 @@
+-------------------
+REGEX METHOD SPEED
+-------------------
+
+vimero@Kazutoro:~/Projects/fsm-analyser$ make run-d11
+
+Processing logs: 100% complete
+Analysis complete!
+Found anomalies: 15
+Report saved to: report.csv
+
+Time taken: 15 ms
+Time taken: 6 ms
+Time taken: 19 ms
+
+==============================
+vimero@Kazutoro:~/Projects/fsm-analyser$ make run-d12
+
+Processing logs: 100% complete
+Analysis complete!
+Found anomalies: 12
+Report saved to: report.csv
+
+Time taken: 5 ms
+Time taken: 15 ms
+Time taken: 14 ms
+
+==============================
+vimero@Kazutoro:~/Projects/fsm-analyser$ make run-d13
+
+Processing logs: 100% complete
+Analysis complete!
+Found anomalies: 22
+Report saved to: report.csv
+
+Time taken: 8 ms
+Time taken: 25 ms
+Time taken: 28 ms
+
+===============================
+1 GB TEST
+
+Так долго, что задолбался ждать, там будет больше 5 минут!
+(20K строк 1413ms ~14K строк/сек)
+
+---------------------
+HAND PARSE METHOD SPEED
+---------------------
+
+vimero@Kazutoro:~/Projects/fsm-analyser$ make run-d11
+
+Processing logs: 100% complete
+Analysis complete!
+Found anomalies: 15
+Report saved to: report.csv
+
+Time taken: 4 ms
+Time taken: 4 ms
+Time taken: 4 ms
+
+==============================
+vimero@Kazutoro:~/Projects/fsm-analyser$ make run-d12
+
+Processing logs: 100% complete
+Analysis complete!
+Found anomalies: 12
+Report saved to: report.csv
+
+Time taken: 4 ms
+Time taken: 5 ms
+Time taken: 3 ms
+
+
+==============================
+vimero@Kazutoro:~/Projects/fsm-analyser$ make run-d13
+
+Processing logs: 100% complete
+Analysis complete!
+Found anomalies: 22
+Report saved to: report.csv
+
+Time taken: 8 ms
+Time taken: 6 ms
+Time taken: 12 ms
+
+===============================
+1 GB TEST
+
+Уже лучше! Тут я дождался
+(20K строк	157ms	~127K строк/сек (9x))
+
+Analysis complete!
+Found anomalies: 10000
+Report saved to: test_large_out.csv
+Time taken: 106712 ms
+
+
+---------------------
+BUFFER READ METHOD
+---------------------
+
+1 GB TEST
+
+Прогресс двигается каждую секунду, но в другую сторону!
+(1.9Гб (18M строк) - 150219ms - ~120K строк/сек)
+
+Analysis complete!
+Found anomalies: 10000
+Report saved to: test_large_out.csv
+Time taken: 150219 ms
+
+Отказываемся от этой идеи, гетлайн победил!
+
+---------------------
+TIME OPTIMIZTION
+---------------------
+
+Всё уже супер хорошо, но мы можем лучше!
+
+---------------------
+THREAD ASYNCHRON
+---------------------
+
+comming soon
+

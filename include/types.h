@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <chrono>
+#include <cstdint>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -8,7 +9,8 @@
 
 namespace fsm {
 
-using Timestamp = std::chrono::system_clock::time_point;
+// Формат: "2026-01-12 09:07:02.345" (23 символа)
+using Timestamp = std::string;
 
 // Составной ключ для FSM: имя + id
 struct MachineKey {

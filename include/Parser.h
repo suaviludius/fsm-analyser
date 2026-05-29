@@ -40,16 +40,13 @@ public:
     // Устанавливает конечные состояния из файла
     void loadEndStates(const std::string& filename);
 
-private:
+    // Парсинг timestamp для расчёта duration (public для Analyzer)
+    uint64_t parseTimestamp(const std::string& timestampStr);
 
+private:
     // Кэш конечных состояний для каждого типа FSM
     std::unordered_map<std::string, std::unordered_set<std::string>> m_endStates;
 
-    Timestamp parseTimestamp(const std::string& timestampStr);
-    std::string extractMachineName(const std::string& line);
-    uint64_t extractMachineId(const std::string& line);
-    
-    // Оптимизированные методы парсинга
     bool parseMessageFast(const std::string& line, ParseResult& result);
     bool parseStateChangeFast(const std::string& line, ParseResult& result);
 };

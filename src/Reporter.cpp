@@ -7,18 +7,6 @@
 
 namespace fsm {
 
-std::string Reporter::formatTimestamp(Timestamp ts) {
-    auto time = std::chrono::system_clock::to_time_t(ts);
-    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(ts.time_since_epoch()) % 1000;
-
-    std::tm* tm = std::localtime(&time);
-    std::ostringstream oss;
-    oss << std::put_time(tm, "%Y-%m-%d %H:%M:%S");
-    oss << '.' << std::setfill('0') << std::setw(3) << ms.count();
-
-    return oss.str();
-}
-
 std::string Reporter::formatDuration(std::chrono::milliseconds duration) {
     std::ostringstream oss;
 
@@ -37,11 +25,11 @@ std::string Reporter::formatDuration(std::chrono::milliseconds duration) {
     return oss.str();
 }
 
-std::string Reporter::generateCsv(const std::vector<Anomaly>& anomalies, Timestamp lastTimestamp) {
+std::string Reporter::generateCsv(const std::vector<Anomaly>& anomalies) {
     std::ostringstream oss;
 
     for (const auto& anomaly : anomalies) {
-        oss << formatTimestamp(anomaly.timestamp) << ","
+        oss << anomaly.timestamp << ","
             << anomaly.machineName << ","
             << anomaly.machineId << ","
             << anomaly.state << ","
@@ -53,14 +41,13 @@ std::string Reporter::generateCsv(const std::vector<Anomaly>& anomalies, Timesta
 }
 
 void Reporter::saveToFile(const std::vector<Anomaly>& anomalies,
-                         Timestamp lastTimestamp,
                          const std::string& filename) {
     std::ofstream file(filename);
     if (!file.is_open()) {
         throw std::runtime_error("Cannot create output file: " + filename);
     }
 
-    file << generateCsv(anomalies, lastTimestamp);
+    file << generateCsv(anomalies);
 }
 
 } // namespace fsm

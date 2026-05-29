@@ -55,11 +55,7 @@ void Analyzer::analyze(const std::string& logFile) {
     }
 
     // Финальная проверка на зависшие FSM
-    // Используем последний известный timestamp из лога
-    if (!m_lastTimestamp.has_value()) {
-        m_lastTimestamp = std::chrono::system_clock::now();
-    }
-    detectStuckMachines(m_lastTimestamp.value());
+    detectStuckMachines();
 
     // Завершаем прогресс
     m_progress = 100;
@@ -74,8 +70,6 @@ void Analyzer::processStateChange(const ParseResult& result) {
     info.currentState = result.newState;
     info.lastUpdate = result.timestamp;
     info.isTerminal = m_parser.isTerminalState(info.currentState, result.machineName);
-
-    m_lastTimestamp = result.timestamp;
 }
 
 void Analyzer::processMessage(const ParseResult& result) {
@@ -86,21 +80,38 @@ void Analyzer::processMessage(const ParseResult& result) {
     info.lastMessage = result.incomingMessage;
     info.lastUpdate = result.timestamp;
     info.isTerminal = m_parser.isTerminalState(info.currentState, result.machineName);
-
-    m_lastTimestamp = result.timestamp;
 }
 
-void Analyzer::detectStuckMachines(Timestamp lastTimestamp) {
+void Analyzer::detectStuckMachines() {
+    // Находим последний timestamp среди всех машин
+    Timestamp lastTimestampStr;
+    uint64_t lastTimestampMs = 0;
+
     for (const auto& [key, info] : m_machines) {
-        // Если не достигло конечного состояния - зависло
+        uint64_t tsMs = m_parser.parseTimestamp(info.lastUpdate);
+        if (tsMs > lastTimestampMs) {
+            lastTimestampMs = tsMs;
+            lastTimestampStr = info.lastUpdate;
+        }
+    }
+
+    // Если машин нет, используем текущее время
+    if (lastTimestampMs == 0) {
+        return;
+    }
+
+    for (const auto& [key, info] : m_machines) {
         if (!info.isTerminal) {
+            // Парсим lastUpdate ТОЛЬКО для аномалии
+            uint64_t lastUpdateMs = m_parser.parseTimestamp(info.lastUpdate);
+
             Anomaly anomaly;
             anomaly.timestamp = info.lastUpdate;
             anomaly.machineName = key.name;
             anomaly.machineId = key.id;
             anomaly.state = info.currentState;
             anomaly.lastMessage = info.lastMessage;
-            anomaly.duration = std::chrono::duration_cast<std::chrono::milliseconds>(lastTimestamp - info.lastUpdate);
+            anomaly.duration = std::chrono::milliseconds(lastTimestampMs - lastUpdateMs);
 
             m_anomalies.push_back(anomaly);
         }

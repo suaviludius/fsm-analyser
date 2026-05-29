@@ -59,8 +59,7 @@ TEST_F(FullPipelineTest, TestDataset1) {
     const auto& anomalies = analyzer.getAnomalies();
 
     // 4. Сохраняем результат
-    auto lastTimestamp = std::chrono::system_clock::now();
-    fsm::Reporter::saveToFile(anomalies, lastTimestamp, m_actualOutputFile);
+    fsm::Reporter::saveToFile(anomalies, m_actualOutputFile);
 
     // 5. Сравниваем с ожидаемым результатом
     std::string expected = readFile(m_expectedOutputFile);

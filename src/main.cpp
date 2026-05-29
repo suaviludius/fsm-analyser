@@ -35,13 +35,10 @@ int main(int argc, char* argv[]) {
         const auto& anomalies = analyzer.getAnomalies();
 
         // Сохраняем отчет
-        // Для последнего timestamp берем текущее время
-        auto lastTimestamp = std::chrono::system_clock::now();
-        fsm::Reporter::saveToFile(anomalies, lastTimestamp, outputFile);
+        fsm::Reporter::saveToFile(anomalies, outputFile);
 
         auto endTime = std::chrono::steady_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-            endTime - startTime);
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
 
         std::cout << "\n\nAnalysis complete!" << std::endl;
         std::cout << "Found anomalies: " << anomalies.size() << std::endl;

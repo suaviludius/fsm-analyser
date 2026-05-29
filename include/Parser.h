@@ -3,7 +3,7 @@
 
 #include <string>
 #include <optional>
-#include <regex>
+#include <string_view>
 #include <unordered_set>
 
 namespace fsm {
@@ -29,7 +29,7 @@ struct ParseResult {
 
 class LogParser {
 public:
-    LogParser();
+    LogParser() = default;
 
     // Парсит одну строку лога
     ParseResult parse(const std::string& line);
@@ -41,10 +41,6 @@ public:
     void loadEndStates(const std::string& filename);
 
 private:
-    // Регулярные выражения для быстрого парсинга
-    std::regex m_stateChangeRegex;    // < St: XXX
-    std::regex m_messageRegex;        // > St: XXX Pr: YYY
-    std::regex m_timestampRegex;      // 2026-01-12 09:04:02.048
 
     // Кэш конечных состояний для каждого типа FSM
     std::unordered_map<std::string, std::unordered_set<std::string>> m_endStates;
@@ -52,6 +48,10 @@ private:
     Timestamp parseTimestamp(const std::string& timestampStr);
     std::string extractMachineName(const std::string& line);
     uint64_t extractMachineId(const std::string& line);
+    
+    // Оптимизированные методы парсинга
+    bool parseMessageFast(const std::string& line, ParseResult& result);
+    bool parseStateChangeFast(const std::string& line, ParseResult& result);
 };
 
 } // namespace fsm

@@ -4,22 +4,117 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
-#include <regex>
+#include <string_view>
 
 namespace fsm {
 
-LogParser::LogParser() {
-    // Регулярное выражение для смены состояния: "< St: XXX"
-    // Пример: "FSM: Sg.SIP.UA id: 2621; < St: 9 WAITING_PRACK"
-    m_stateChangeRegex = std::regex(
-        R"((\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3}).*FSM:\s+([^\s]+)\s+id:\s+(\d+);\s+<\s+St:\s+\d+\s+(\w+))"
-    );
+// Быстрый парсинг входящего сообщения
+// Формат: "2026-01-12 09:07:02.345 ... FSM: Sg.SIP.UA id: 2621; > St: 5 INCOMING_DIALOG_PROCEEDING Pr: 38418:4 SIP_UA_ALERTING_REQ ()"
+bool LogParser::parseMessageFast(const std::string& line, ParseResult& result) {
+    // 1. Проверяем минимальную длину (timestamp = 23 символа)
+    if (line.size() < 23) return false;
+    
+    // 2. Парсим timestamp (первые 23 символа)
+    result.timestamp = parseTimestamp(line.substr(0, 23));
+    
+    // 3. Ищем "FSM: "
+    auto fsmPos = line.find("FSM: ");
+    if (fsmPos == std::string::npos) return false;
+    
+    // 4. Извлекаем machineName (до " id: ")
+    auto idPos = line.find(" id: ", fsmPos);
+    if (idPos == std::string::npos) return false;
+    result.machineName = line.substr(fsmPos + 5, idPos - fsmPos - 5);
+    
+    // 5. Извлекаем machineId
+    auto semicolonPos = line.find(";", idPos);
+    if (semicolonPos == std::string::npos) return false;
+    try {
+        result.machineId = std::stoull(line.substr(idPos + 5, semicolonPos - idPos - 5));
+    } catch (...) {
+        return false;
+    }
+    
+    // 6. Ищем "> St: " (признак входящего сообщения)
+    auto stPos = line.find("> St: ", semicolonPos);
+    if (stPos == std::string::npos) return false;
+    
+    // 7. Извлекаем текущее состояние (число + имя)
+    auto stateNumEnd = line.find(' ', stPos + 6);
+    if (stateNumEnd == std::string::npos) return false;
+    
+    auto stateNameStart = stateNumEnd + 1;
+    auto stateNameEnd = line.find(' ', stateNameStart);
+    if (stateNameEnd == std::string::npos) return false;
+    result.currentState = line.substr(stateNameStart, stateNameEnd - stateNameStart);
+    
+    // 8. Ищем " Pr: " (приоритет)
+    auto prPos = line.find(" Pr: ", stateNameEnd);
+    if (prPos == std::string::npos) return false;
+    
+    // 9. Пропускаем "Pr: X:Y " (приоритет в формате число:число)
+    auto priorityColon1 = line.find(':', prPos);
+    if (priorityColon1 == std::string::npos) return false;
+    auto priorityColon2 = line.find(':', priorityColon1 + 1);
+    if (priorityColon2 == std::string::npos) return false;
+    auto priorityEnd = line.find(' ', priorityColon2);
+    if (priorityEnd == std::string::npos) return false;
+    
+    // 10. Извлекаем incoming message (после приоритета, до "(")
+    auto msgStart = priorityEnd + 1;
+    auto msgEnd = line.find(" (", msgStart);
+    if (msgEnd == std::string::npos) msgEnd = line.size();
+    result.incomingMessage = line.substr(msgStart, msgEnd - msgStart);
+    
+    result.type = ParseResult::Type::MESSAGE;
+    return true;
+}
 
-    // Регулярное выражение для входящего сообщения: "> St: XXX Pr: YYY"
-    // Пример: "FSM: Sg.SIP.UA id: 2621; > St: 5 INCOMING_DIALOG_PROCEEDING Pr: 38418:4 SIP_UA_ALERTING_REQ ()"
-    m_messageRegex = std::regex(
-        R"((\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3}).*FSM:\s+([^\s]+)\s+id:\s+(\d+);\s+>\s+St:\s+\d+\s+(\w+)\s+Pr:\s+\d+:\d+\s+(\w+)\s*\([^)]*\))"
-    );
+// Быстрый парсинг смены состояния
+// Формат: "2026-01-12 09:07:02.345 ... FSM: Sg.SIP.UA id: 2621; < St: 9 WAITING_PRACK"
+bool LogParser::parseStateChangeFast(const std::string& line, ParseResult& result) {
+    // 1. Проверяем минимальную длину
+    if (line.size() < 23) return false;
+    
+    // 2. Парсим timestamp
+    result.timestamp = parseTimestamp(line.substr(0, 23));
+    
+    // 3. Ищем "FSM: "
+    auto fsmPos = line.find("FSM: ");
+    if (fsmPos == std::string::npos) return false;
+    
+    // 4. Извлекаем machineName
+    auto idPos = line.find(" id: ", fsmPos);
+    if (idPos == std::string::npos) return false;
+    result.machineName = line.substr(fsmPos + 5, idPos - fsmPos - 5);
+    
+    // 5. Извлекаем machineId
+    auto semicolonPos = line.find(";", idPos);
+    if (semicolonPos == std::string::npos) return false;
+    try {
+        result.machineId = std::stoull(line.substr(idPos + 5, semicolonPos - idPos - 5));
+    } catch (...) {
+        return false;
+    }
+    
+    // 6. Ищем "< St: " (признак смены состояния)
+    auto stPos = line.find("< St: ", semicolonPos);
+    if (stPos == std::string::npos) return false;
+    
+    // 7. Извлекаем новое состояние (число + имя)
+    auto stateNumEnd = line.find(' ', stPos + 6);
+    if (stateNumEnd == std::string::npos) return false;
+    
+    auto stateNameStart = stateNumEnd + 1;
+    auto stateNameEnd = line.find(' ', stateNameStart);
+    if (stateNameEnd == std::string::npos) {
+        result.newState = line.substr(stateNameStart);
+    } else {
+        result.newState = line.substr(stateNameStart, stateNameEnd - stateNameStart);
+    }
+    
+    result.type = ParseResult::Type::STATE_CHANGE;
+    return true;
 }
 
 Timestamp LogParser::parseTimestamp(const std::string& timestampStr) {
@@ -43,31 +138,43 @@ Timestamp LogParser::parseTimestamp(const std::string& timestampStr) {
     return tp;
 }
 
+std::string LogParser::extractMachineName(const std::string& line) {
+    auto fsmPos = line.find("FSM: ");
+    if (fsmPos == std::string::npos) return "";
+    
+    auto idPos = line.find(" id: ", fsmPos);
+    if (idPos == std::string::npos) return "";
+    
+    return line.substr(fsmPos + 5, idPos - fsmPos - 5);
+}
+
+uint64_t LogParser::extractMachineId(const std::string& line) {
+    auto idPos = line.find(" id: ");
+    if (idPos == std::string::npos) return 0;
+    
+    auto semicolonPos = line.find(";", idPos);
+    if (semicolonPos == std::string::npos) return 0;
+    
+    try {
+        return std::stoull(line.substr(idPos + 5, semicolonPos - idPos - 5));
+    } catch (...) {
+        return 0;
+    }
+}
+
 ParseResult LogParser::parse(const std::string& line) {
     ParseResult result;
-
-    // Пробуем как входящее сообщение (должно быть первым, так как содержит больше информации)
-    std::smatch match;
-    if (std::regex_search(line, match, m_messageRegex)) {
-        result.type = ParseResult::Type::MESSAGE;
-        result.timestamp = parseTimestamp(match[1]);
-        result.machineName = match[2];
-        result.machineId = std::stoull(match[3]);
-        result.currentState = match[4];      // Текущее состояние
-        result.incomingMessage = match[5];   // Входящее сообщение
+    
+    // Пробуем как входящее сообщение (содержит больше информации)
+    if (parseMessageFast(line, result)) {
         return result;
     }
 
     // Пробуем как смену состояния
-    if (std::regex_search(line, match, m_stateChangeRegex)) {
-        result.type = ParseResult::Type::STATE_CHANGE;
-        result.timestamp = parseTimestamp(match[1]);
-        result.machineName = match[2];
-        result.machineId = std::stoull(match[3]);
-        result.newState = match[4];          // Новое состояние
+    if (parseStateChangeFast(line, result)) {
         return result;
     }
-
+    
     result.type = ParseResult::Type::INVALID;
     return result;
 }

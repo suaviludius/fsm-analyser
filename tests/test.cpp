@@ -5,6 +5,8 @@
 
 #include <fstream>
 #include <filesystem>
+#include <regex>
+#include <algorithm>
 
 namespace fs = std::filesystem;
 
@@ -22,8 +24,7 @@ struct FullPipelineTest : public testing::Test {
         if (!file.is_open()) {
             return "";
         }
-        std::string content((std::istreambuf_iterator<char>(file)),
-                            std::istreambuf_iterator<char>());
+        std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
         return content;
     }
 

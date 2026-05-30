@@ -221,14 +221,14 @@ void LogParser::loadEndStates(const std::string& filename) {
             endState.erase(0, endState.find_first_not_of(" \t"));
             endState.erase(endState.find_last_not_of(" \t") + 1);
 
-            m_endStates[machineName].insert(endState);
+            m_endStates[std::move(machineName)] = std::move(endState);
         }
     }
 }
 
 bool LogParser::isTerminalState(const std::string& state, const std::string& machineName) {
     auto it = m_endStates.find(machineName);
-    return it != m_endStates.end() && it->second.find(state) != it->second.end();
+    return it != m_endStates.end() && it->second == state;
 }
 
 } // namespace fsm

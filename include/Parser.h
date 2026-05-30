@@ -70,7 +70,7 @@ private:
     };
 
     // Кэш конечных состояний для каждого типа FSM
-    std::unordered_map<std::string, std::unordered_set<std::string>> m_endStates;
+    std::unordered_map<std::string, std::string> m_endStates;
 };
 
 } // namespace fsm

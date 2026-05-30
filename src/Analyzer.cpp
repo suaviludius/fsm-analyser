@@ -37,9 +37,9 @@ void Analyzer::analyze(const std::string& logFile) {
 
         auto result = m_parser.parse(line);
 
-        if (result.type == ParseResult::Type::STATE_CHANGE) {
+        if (result.type == ParseResult::STATE_CHANGE) {
             processStateChange(result);
-        } else if (result.type == ParseResult::Type::MESSAGE) {
+        } else if (result.type == ParseResult::MESSAGE) {
             processMessage(result);
         }
 
@@ -84,7 +84,7 @@ void Analyzer::processMessage(const ParseResult& result) {
 
 void Analyzer::detectStuckMachines() {
     // Находим последний timestamp среди всех машин
-    Timestamp lastTimestampStr;
+    std::string lastTimestampStr;
     uint64_t lastTimestampMs = 0;
 
     for (const auto& [key, info] : m_machines) {

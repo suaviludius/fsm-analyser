@@ -9,9 +9,6 @@
 
 namespace fsm {
 
-// Формат: "2026-01-12 09:07:02.345" (23 символа)
-using Timestamp = std::string;
-
 // Составной ключ для FSM: имя + id
 struct MachineKey {
     std::string name;
@@ -32,13 +29,13 @@ struct MachineKeyHash {
 struct MachineInfo {
     std::string currentState;
     std::string lastMessage;
-    Timestamp lastUpdate;
+    std::string lastUpdate;
     bool isTerminal = false;
 };
 
 // Аномалия
 struct Anomaly {
-    Timestamp timestamp;
+    std::string timestamp;
     std::string machineName;
     uint64_t machineId;
     std::string state;

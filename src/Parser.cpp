@@ -8,113 +8,178 @@
 
 namespace fsm {
 
-// Быстрый парсинг входящего сообщения
-// Формат: "2026-01-12 09:07:02.345 ... FSM: Sg.SIP.UA id: 2621; > St: 5 INCOMING_DIALOG_PROCEEDING Pr: 38418:4 SIP_UA_ALERTING_REQ ()"
-bool LogParser::parseMessageFast(const std::string& line, ParseResult& result) {
-    // 1. Проверяем минимальную длину (timestamp = 23 символа)
-    if (line.size() < 23) return false;
+// TODO: сделать optional будет хорошая идея?
+ParseResult LogParser::parse(const std::string& line) {
+    ParseResult result;
 
-    // 2. Парсим timestamp (первые 23 символа)
-    result.timestamp = line.substr(0, 23);
+    State state = State::START;
+    size_t pos = 0;
+    size_t startPos = 0;
 
-    // 3. Ищем "FSM: "
-    auto fsmPos = line.find("FSM: ");
-    if (fsmPos == std::string::npos) return false;
+    // Временные переменные
+    result.type = ParseResult::MESSAGE;
+    int priorityDepth = 0;
 
-    // 4. Извлекаем machineName (до " id: ")
-    auto idPos = line.find(" id: ", fsmPos);
-    if (idPos == std::string::npos) return false;
-    result.machineName = line.substr(fsmPos + 5, idPos - fsmPos - 5);
+    while (pos <= line.size() && state != State::DONE && state != State::ERROR) {
 
-    // 5. Извлекаем machineId
-    auto semicolonPos = line.find(";", idPos);
-    if (semicolonPos == std::string::npos) return false;
-    try {
-        result.machineId = std::stoull(line.substr(idPos + 5, semicolonPos - idPos - 5));
-    } catch (...) {
-        return false;
+        switch (state) {
+            case State::START:
+                if (pos == 0 && line.size() >= 23) {
+                    result.timestamp = line.substr(0, 23);
+                    pos = 23;  // После timestamp устанавливаем сами
+                    state = State::TIMESTAMP;
+                } else {
+                    state = State::ERROR;
+                }
+                break;
+
+            case State::TIMESTAMP:
+                // Ищем " FSM: "
+                if (line.substr(pos, 6) == " FSM: ") {
+                    pos += 6;
+                    state = State::FSM_PREFIX;
+                } else {
+                    pos++;
+                }
+                break;
+
+            case State::FSM_PREFIX:
+                startPos = pos;
+                state = State::MACHINE_NAME;
+                pos++;
+                break;
+
+            case State::MACHINE_NAME:
+                // Ищем " id: "
+                if (pos + 4 <= line.size() && line.substr(pos, 4) == " id:") {
+                    result.machineName = line.substr(startPos, pos - startPos);
+                    pos += 4;
+                    state = State::MACHINE_ID;
+                } else {
+                    pos++;
+                }
+                break;
+
+            case State::MACHINE_ID:
+                // Пропускаем пробелы после "id:"
+                while (pos < line.size() && line[pos] == ' ') pos++;
+
+                startPos = pos;
+
+                // Парсим число до ';'
+                while (pos < line.size() && line[pos] != ';') pos++;
+                if (pos > startPos) {
+                    result.machineId = std::stoull(line.substr(startPos, pos - startPos));
+                    pos++; // пропускаем ';'
+                    state = State::ARROW_TYPE;
+                } else {
+                    state = State::ERROR;
+                }
+                break;
+
+            case State::ARROW_TYPE:
+                // Пропускаем пробелы
+                while (pos < line.size() && line[pos] == ' ') pos++;
+
+                if (pos + 4 <= line.size()) {
+                    if (line.substr(pos, 4) == "> St") {
+                        result.type = ParseResult::MESSAGE;
+                        pos += 4;
+                        state = State::STATE_NUMBER;
+                    } else if (line.substr(pos, 4) == "< St") {
+                        result.type = ParseResult::STATE_CHANGE;
+                        pos += 4;
+                        state = State::STATE_NUMBER;
+                    } else {
+                        state = State::ERROR;
+                    }
+                } else {
+                    state = State::ERROR;
+                }
+                break;
+
+            case State::STATE_NUMBER:
+                // Пропускаем ": "
+                if (line.substr(pos, 2) == ": ") {
+                    pos += 2;
+                }
+                // Пропускаем число
+                while (pos < line.size() && std::isdigit(line[pos])) {
+                    pos++;
+                }
+                // Пропускаем пробелы после числа
+                while (pos < line.size() && line[pos] == ' ') {
+                    pos++;
+                }
+                state = State::STATE_NAME;
+                break;
+
+            case State::STATE_NAME:
+                startPos = pos;
+                // Читаем имя состояния до пробела или конца строки
+                while (pos < line.size() && line[pos] != ' ') pos++;
+
+                if (result.type == ParseResult::MESSAGE) {
+                    result.currentState = line.substr(startPos, pos - startPos);
+                    state = State::PRIORITY_PREFIX;
+                } else {
+                    result.newState = line.substr(startPos, pos - startPos);
+                    state = State::DONE;  // STATE_CHANGE завершён
+                }
+                break;
+
+            case State::PRIORITY_PREFIX:
+                // Ищем " Pr: "
+                if (pos + 4 <= line.size() && line.substr(pos, 4) == " Pr:") {
+                    pos += 4;
+                    state = State::PRIORITY_VALUE;
+                } else {
+                    pos++;
+                }
+                break;
+
+            case State::PRIORITY_VALUE:
+                // Пропускаем "X:Y "
+                while (pos < line.size() && line[pos] == ' ') pos++;
+
+                while (pos < line.size() && line[pos] != ' ') {
+                    if (line[pos] == ':') priorityDepth++;
+                    pos++;
+                }
+                if (priorityDepth >= 1) {
+                    state = State::MESSAGE_TEXT;
+                } else {
+                    state = State::ERROR;
+                }
+                break;
+
+            case State::MESSAGE_TEXT:
+                // Пропускаем пробелы
+                while (pos < line.size() && line[pos] == ' ') pos++;
+
+                startPos = pos;
+
+                // Читаем сообщение до " (" или конца строки
+                while (pos < line.size()) {
+                    if (pos + 2 <= line.size() && line.substr(pos, 2) == " (") {
+                        break;
+                    }
+                    pos++;
+                }
+                result.incomingMessage = line.substr(startPos, pos - startPos);
+                state = State::DONE;
+                break;
+
+            default:
+                state = State::ERROR;
+                break;
+        }
+
     }
 
-    // 6. Ищем "> St: " (признак входящего сообщения)
-    auto stPos = line.find("> St: ", semicolonPos);
-    if (stPos == std::string::npos) return false;
+    if(state != State::DONE) result.type = ParseResult::INVALID;
 
-    // 7. Извлекаем текущее состояние (число + имя)
-    auto stateNumEnd = line.find(' ', stPos + 6);
-    if (stateNumEnd == std::string::npos) return false;
-
-    auto stateNameStart = stateNumEnd + 1;
-    auto stateNameEnd = line.find(' ', stateNameStart);
-    if (stateNameEnd == std::string::npos) return false;
-    result.currentState = line.substr(stateNameStart, stateNameEnd - stateNameStart);
-
-    // 8. Ищем " Pr: " (приоритет)
-    auto prPos = line.find(" Pr: ", stateNameEnd);
-    if (prPos == std::string::npos) return false;
-
-    // 9. Пропускаем "Pr: X:Y " (приоритет в формате число:число)
-    auto priorityColon1 = line.find(':', prPos);
-    if (priorityColon1 == std::string::npos) return false;
-    auto priorityColon2 = line.find(':', priorityColon1 + 1);
-    if (priorityColon2 == std::string::npos) return false;
-    auto priorityEnd = line.find(' ', priorityColon2);
-    if (priorityEnd == std::string::npos) return false;
-
-    // 10. Извлекаем incoming message (после приоритета, до "(")
-    auto msgStart = priorityEnd + 1;
-    auto msgEnd = line.find(" (", msgStart);
-    if (msgEnd == std::string::npos) msgEnd = line.size();
-    result.incomingMessage = line.substr(msgStart, msgEnd - msgStart);
-
-    result.type = ParseResult::Type::MESSAGE;
-    return true;
-}
-
-// Быстрый парсинг смены состояния
-// Формат: "2026-01-12 09:07:02.345 ... FSM: Sg.SIP.UA id: 2621; < St: 9 WAITING_PRACK"
-bool LogParser::parseStateChangeFast(const std::string& line, ParseResult& result) {
-    // 1. Проверяем минимальную длину
-    if (line.size() < 23) return false;
-
-    // 2. Парсим timestamp
-    result.timestamp = line.substr(0, 23);
-
-    // 3. Ищем "FSM: "
-    auto fsmPos = line.find("FSM: ");
-    if (fsmPos == std::string::npos) return false;
-
-    // 4. Извлекаем machineName
-    auto idPos = line.find(" id: ", fsmPos);
-    if (idPos == std::string::npos) return false;
-    result.machineName = line.substr(fsmPos + 5, idPos - fsmPos - 5);
-
-    // 5. Извлекаем machineId
-    auto semicolonPos = line.find(";", idPos);
-    if (semicolonPos == std::string::npos) return false;
-    try {
-        result.machineId = std::stoull(line.substr(idPos + 5, semicolonPos - idPos - 5));
-    } catch (...) {
-        return false;
-    }
-
-    // 6. Ищем "< St: " (признак смены состояния)
-    auto stPos = line.find("< St: ", semicolonPos);
-    if (stPos == std::string::npos) return false;
-
-    // 7. Извлекаем новое состояние (число + имя)
-    auto stateNumEnd = line.find(' ', stPos + 6);
-    if (stateNumEnd == std::string::npos) return false;
-
-    auto stateNameStart = stateNumEnd + 1;
-    auto stateNameEnd = line.find(' ', stateNameStart);
-    if (stateNameEnd == std::string::npos) {
-        result.newState = line.substr(stateNameStart);
-    } else {
-        result.newState = line.substr(stateNameStart, stateNameEnd - stateNameStart);
-    }
-
-    result.type = ParseResult::Type::STATE_CHANGE;
-    return true;
+    return result;
 }
 
 
@@ -135,23 +200,6 @@ uint64_t LogParser::parseTimestamp(const std::string& ts) {
     tp += std::chrono::milliseconds(ms);
 
     return std::chrono::duration_cast<std::chrono::milliseconds>(tp.time_since_epoch()).count();
-}
-
-ParseResult LogParser::parse(const std::string& line) {
-    ParseResult result;
-
-    // Пробуем как входящее сообщение (содержит больше информации)
-    if (parseMessageFast(line, result)) {
-        return result;
-    }
-
-    // Пробуем как смену состояния
-    if (parseStateChangeFast(line, result)) {
-        return result;
-    }
-
-    result.type = ParseResult::Type::INVALID;
-    return result;
 }
 
 void LogParser::loadEndStates(const std::string& filename) {

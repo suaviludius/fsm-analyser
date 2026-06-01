@@ -38,7 +38,7 @@ public:
     LogParser() = default;
 
     // Парсит одну строку лога (любого вида)
-    ParseResult parse(const std::string& line);
+    ParseResult parse(std::string_view line);
 
     // Проверяет, является ли состояние терминальным
     bool isTerminalState(const std::string& state, const std::string& machineName);

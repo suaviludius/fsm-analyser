@@ -13,13 +13,11 @@ namespace fsm {
 ParseResult LogParser::parse(std::string_view line) {
     ParseResult result;
 
-    // Предварительно выделяем память для строк
-    result.timestamp.reserve(24);
-    result.machineName.reserve(32);
-    result.currentState.reserve(32);
-    // Вот этих двух оставить тут или перенести в switch?
-    //result.newState.reserve(32);
-    //result.incomingMessage.reserve(128);
+    // один раз посчитали и хватит
+    const size_t lineSize = line.size();
+    if (lineSize < 23) {
+        return result;
+    }
 
     State state = State::START;
     size_t pos = 0;
@@ -29,15 +27,12 @@ ParseResult LogParser::parse(std::string_view line) {
     result.type = ParseResult::MESSAGE;
     int priorityDepth = 0;
 
-    // один раз посчитали и хватит
-    const size_t lineSize = line.size();
-
     while (pos <= lineSize && state != State::DONE && state != State::ERROR) {
 
         switch (state) {
             case State::START:
-                if (pos == 0 && line.size() >= 23) {
-                    result.timestamp = std::string(line.substr(0, 23));
+                if (lineSize >= 23) {
+                    result.timestamp = line.substr(0, 23);
                     pos = 23;  // После timestamp устанавливаем сами
                     state = State::TIMESTAMP;
                 } else {
@@ -64,7 +59,7 @@ ParseResult LogParser::parse(std::string_view line) {
             case State::MACHINE_NAME:
                 // Ищем " id: "
                 if (pos + 4 <= lineSize && line.substr(pos, 4) == " id:") {
-                    result.machineName = std::string(line.substr(startPos, pos - startPos));
+                    result.machineName = line.substr(startPos, pos - startPos);
                     pos += 4;
                     state = State::MACHINE_ID;
                 } else {
@@ -140,10 +135,10 @@ ParseResult LogParser::parse(std::string_view line) {
                 while (pos < lineSize && line[pos] != ' ') pos++;
 
                 if (result.type == ParseResult::MESSAGE) {
-                    result.currentState = std::string(line.substr(startPos, pos - startPos));
+                    result.currentState = line.substr(startPos, pos - startPos);
                     state = State::PRIORITY_PREFIX;
                 } else {
-                    result.newState = std::string(line.substr(startPos, pos - startPos));
+                    result.newState = line.substr(startPos, pos - startPos);
                     state = State::DONE;  // STATE_CHANGE завершён
                 }
                 break;
@@ -189,7 +184,7 @@ ParseResult LogParser::parse(std::string_view line) {
                     }
                     pos++;
                 }
-                result.incomingMessage = std::string(line.substr(startPos, pos - startPos));
+                result.incomingMessage = line.substr(startPos, pos - startPos);
                 state = State::DONE;
                 break;
 

@@ -20,16 +20,16 @@ struct ParseResult {
     // 0= INVALID, 1= MESSAGE, 2= STATE_CHANGE
     uint8_t type = INVALID;
 
-    std::string timestamp;
-    std::string machineName;
+    std::string_view timestamp;
+    std::string_view machineName;
     uint64_t machineId = 0;
 
     // Для STATE_CHANGE
-    std::string newState;
+    std::string_view newState;
 
     // Для MESSAGE
-    std::string currentState;
-    std::string incomingMessage;
+    std::string_view currentState;
+    std::string_view incomingMessage;
 };
 
 

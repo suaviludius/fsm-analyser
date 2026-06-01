@@ -72,14 +72,17 @@ void Analyzer::processStateChange(const ParseResult& result) {
     info.isTerminal = m_parser.isTerminalState(info.currentState, result.machineName);
 }
 
+// Комментарии поставлены в условие что терминальное состояние
+// не требуется отслеживать от Incoming Message
+
 void Analyzer::processMessage(const ParseResult& result) {
     MachineKey key{result.machineName, result.machineId};
 
     auto& info = m_machines[key];
-    info.currentState = result.currentState;
+    //info.currentState = result.currentState;
     info.lastMessage = result.incomingMessage;
-    info.lastUpdate = result.timestamp;
-    info.isTerminal = m_parser.isTerminalState(info.currentState, result.machineName);
+    //info.lastUpdate = result.timestamp;
+    //info.isTerminal = m_parser.isTerminalState(info.currentState, result.machineName);
 }
 
 void Analyzer::detectStuckMachines() {

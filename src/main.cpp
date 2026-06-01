@@ -40,10 +40,10 @@ int main(int argc, char* argv[]) {
         auto endTime = std::chrono::steady_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
 
-        std::cout << "\n\nAnalysis complete!" << std::endl;
-        std::cout << "Found anomalies: " << anomalies.size() << std::endl;
-        std::cout << "Report saved to: " << outputFile << std::endl;
-        std::cout << "Time taken: " << duration.count() << " ms" << std::endl;
+        std::cout << "\nAnalysis complete!"
+                  << "\nFound anomalies: " << anomalies.size()
+                  << "\nReport saved to: " << outputFile
+                  << "\nTime taken: " << duration.count() << " ms" << std::endl;
 
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;

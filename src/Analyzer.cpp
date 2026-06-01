@@ -1,5 +1,9 @@
 #include "Analyzer.h"
 
+#include <sys/mman.h>
+#include <sys/stat.h> // fstat
+#include <fcntl.h>  // open
+#include <unistd.h> // close
 #include <chrono>
 #include <thread>
 #include <iomanip>
@@ -15,26 +19,66 @@ void Analyzer::loadEndStates(const std::string& filename) {
 }
 
 void Analyzer::analyze(const std::string& logFile) {
-    std::ifstream file(logFile);
-    if (!file.is_open()) {
+    // системный вызов для открывания файла (чисто для Unix/Linux)
+    int fd = open(logFile.c_str(), O_RDONLY);
+    if (fd == -1) {
         throw std::runtime_error("Cannot open file: " + logFile);
     }
 
-    // Первый проход: считаем количество строк (для прогресса)
-    std::string line;
-    while (std::getline(file, line)) {
-        ++m_totalLines;
+    // Получаем размер этого файла
+    struct stat sb;
+    if (fstat(fd, &sb) == -1) {
+        close(fd);
+        throw std::runtime_error("Cannot get file size");
+    }
+    size_t fileSize = sb.st_size;
+
+    // Мапим файл в память (СУПЕР ОЧЕНЬ БЫСТРО)
+    char* data = (char*)mmap(nullptr, fileSize, PROT_READ, MAP_PRIVATE, fd, 0);
+    close(fd);
+
+    if (data == MAP_FAILED) {
+        throw std::runtime_error("mmap failed");
     }
 
-    // Возвращаемся в начало
-    file.clear();
-    file.seekg(0);
+    // Анализируем напрямую в памяти
+    const char* start = data;
+    const char* end = data + fileSize;
+    const char* lineStart = start;
 
-    // Второй проход: обработка
-    m_processedLines = 0;
-    while (std::getline(file, line)) {
-        ++m_processedLines;
+    auto startTime = std::chrono::steady_clock::now();
 
+    for (const char* p = start; p < end; ++p) {
+        if (*p == '\n') {
+            std::string_view line(lineStart, p - lineStart);
+            ++m_processedLines;
+
+            // Обработка строки (без копирования)
+            auto result = m_parser.parse(line);
+
+            if (result.type == ParseResult::STATE_CHANGE) {
+                processStateChange(result);
+            } else if (result.type == ParseResult::MESSAGE) {
+                processMessage(result);
+            }
+
+            // Идем к следующему символу
+            lineStart = p + 1;
+
+            // Обновляем прогресс при изменении процента
+            size_t bytesRead = p - start;
+            int newProgress = static_cast<int>(100.0 * bytesRead / fileSize);
+            if (newProgress > m_progress) {
+                m_progress = newProgress;
+                std::cout << "\rProgress: " << m_progress << "%" << std::flush;
+            }
+        }
+    }
+
+    //Обработка последней строки (если нет \n в конце)
+    // Пока пусть будет так
+    if (lineStart < end) {
+        std::string_view line(lineStart, end - lineStart);
         auto result = m_parser.parse(line);
 
         if (result.type == ParseResult::STATE_CHANGE) {
@@ -43,23 +87,24 @@ void Analyzer::analyze(const std::string& logFile) {
             processMessage(result);
         }
 
-        // Обновляем прогресс каждые 1000 строк
-        if (m_processedLines % 100 == 0) {
-            auto now = std::chrono::steady_clock::now();
-            if (now - m_lastProgressUpdate > std::chrono::milliseconds(500)) {
-                m_progress = static_cast<int>(100.0 * m_processedLines / m_totalLines);
-                printProgress();
-                m_lastProgressUpdate = now;
-            }
-        }
+        // Обновляем прогресс последний раз
+        std::cout << "\rProgress: 100%" << std::flush;
     }
+
+    // Говорим ОС, что выделеные странички памяти можно освободить
+    munmap(data, fileSize);
+
+    auto endTime = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(endTime - startTime);
+
+    std::cout << "Data processed:"
+              << "\nlines: "<< m_processedLines
+              << "\nseconds: " << elapsed.count()
+              << "\nspeed: " << fileSize/(1024 * 1024)/std::max(1,(int)elapsed.count()) << "MB/s";
 
     // Финальная проверка на зависшие FSM
     detectStuckMachines();
 
-    // Завершаем прогресс
-    m_progress = 100;
-    printProgress();
     std::cout << std::endl;
 }
 

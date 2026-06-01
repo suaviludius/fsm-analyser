@@ -7,6 +7,7 @@
 #include <chrono>
 #include <thread>
 #include <iomanip>
+#include <string.h>
 
 namespace fsm {
 
@@ -45,34 +46,40 @@ void Analyzer::analyze(const std::string& logFile) {
     const char* start = data;
     const char* end = data + fileSize;
     const char* lineStart = start;
+    const char* p = start;
 
     auto startTime = std::chrono::steady_clock::now();
 
-    for (const char* p = start; p < end; ++p) {
-        if (*p == '\n') {
-            std::string_view line(lineStart, p - lineStart);
-            ++m_processedLines;
+    while (p < end){
+        // Ищем следующий '\n' от текущей позиции до конца буфера
+        const char* newline = (const char*)memchr(p, '\n', end - p);
+        // нет больше переводов строк
+        if (!newline) break;
 
-            // Обработка строки (без копирования)
-            auto result = m_parser.parse(line);
+        std::string_view line(lineStart, newline - lineStart);
+        ++m_processedLines;
 
-            if (result.type == ParseResult::STATE_CHANGE) {
-                processStateChange(result);
-            } else if (result.type == ParseResult::MESSAGE) {
-                processMessage(result);
-            }
+        // Обработка строки (без копирования)
+        auto result = m_parser.parse(line);
 
-            // Идем к следующему символу
-            lineStart = p + 1;
-
-            // Обновляем прогресс при изменении процента
-            size_t bytesRead = p - start;
-            int newProgress = static_cast<int>(100.0 * bytesRead / fileSize);
-            if (newProgress > m_progress) {
-                m_progress = newProgress;
-                std::cout << "\rProgress: " << m_progress << "%" << std::flush;
-            }
+        if (result.type == ParseResult::STATE_CHANGE) {
+            processStateChange(result);
+        } else if (result.type == ParseResult::MESSAGE) {
+            processMessage(result);
         }
+
+        // Идем к указателю на следующий символ после '\n'
+        lineStart = newline + 1;
+        p = newline + 1;
+
+        // Обновляем прогресс при изменении процента
+        size_t bytesRead = p - start;
+        int newProgress = static_cast<int>(100.0 * bytesRead / fileSize);
+        if (newProgress > m_progress) {
+            m_progress = newProgress;
+            std::cout << "\rProgress: " << m_progress << "%" << std::flush;
+        }
+
     }
 
     //Обработка последней строки (если нет \n в конце)
@@ -97,7 +104,7 @@ void Analyzer::analyze(const std::string& logFile) {
     auto endTime = std::chrono::steady_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(endTime - startTime);
 
-    std::cout << "Data processed:"
+    std::cout << "\nData processed:"
               << "\nlines: "<< m_processedLines
               << "\nseconds: " << elapsed.count()
               << "\nspeed: " << fileSize/(1024 * 1024)/std::max(1,(int)elapsed.count()) << "MB/s";

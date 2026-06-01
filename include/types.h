@@ -19,9 +19,10 @@ struct MachineKey {
     }
 };
 
+// Хэш-функция для MachineKey
 struct MachineKeyHash {
     size_t operator()(const MachineKey& k) const {
-        return std::hash<std::string>()(k.name) ^ (std::hash<uint64_t>()(k.id) << 1);
+        return std::hash<std::string>{}(k.name) * 31 + std::hash<uint64_t>{}(k.id);
     }
 };
 

@@ -11,10 +11,6 @@
 
 namespace fsm {
 
-Analyzer::Analyzer() {
-    m_lastProgressUpdate = std::chrono::steady_clock::now();
-}
-
 void Analyzer::loadEndStates(const std::string& filename) {
     m_parser.loadEndStates(filename);
 }
@@ -122,6 +118,8 @@ void Analyzer::processStateChange(const ParseResult& result) {
     info.currentState = std::string(result.newState);
     info.lastUpdate = std::string(result.timestamp);
     info.isTerminal = m_parser.isTerminalState(info.currentState, key.name);
+
+    m_lastTimestamp = info.lastUpdate;
 }
 
 void Analyzer::processMessage(const ParseResult& result) {
@@ -132,46 +130,38 @@ void Analyzer::processMessage(const ParseResult& result) {
     info.lastMessage = std::string(result.incomingMessage);
     info.lastUpdate = std::string(result.timestamp);
     info.isTerminal = m_parser.isTerminalState(info.currentState, key.name);
+
+    m_lastTimestamp = info.lastUpdate;
 }
 
 void Analyzer::detectStuckMachines() {
-    // Находим последний timestamp среди всех машин
-    std::string lastTimestampStr;
-    uint64_t lastTimestampMs = 0;
-
-    for (const auto& [key, info] : m_machines) {
-        uint64_t tsMs = m_parser.parseTimestamp(info.lastUpdate);
-        if (tsMs > lastTimestampMs) {
-            lastTimestampMs = tsMs;
-            lastTimestampStr = info.lastUpdate;
-        }
-    }
-
-    // Если машин нет, используем текущее время
-    if (lastTimestampMs == 0) {
+    // Есть ли хоть один timestamp?
+    if (m_machines.empty() || m_lastTimestamp.empty()) {
         return;
     }
+
+    // Парсим последний timestamp один раз
+    uint64_t lastTimestampMs = m_parser.parseTimestamp(m_lastTimestamp);
+
+    // Верим в худшее, примерно половина машин - аномалии
+    m_anomalies.clear();
+    m_anomalies.reserve(m_machines.size() / 2);
 
     for (const auto& [key, info] : m_machines) {
         if (!info.isTerminal) {
             // Парсим lastUpdate ТОЛЬКО для аномалии
             uint64_t lastUpdateMs = m_parser.parseTimestamp(info.lastUpdate);
 
-            Anomaly anomaly;
-            anomaly.timestamp = info.lastUpdate;
-            anomaly.machineName = key.name;
-            anomaly.machineId = key.id;
-            anomaly.state = info.currentState;
-            anomaly.lastMessage = info.lastMessage;
-            anomaly.duration = std::chrono::milliseconds(lastTimestampMs - lastUpdateMs);
-
-            m_anomalies.push_back(anomaly);
+            m_anomalies.emplace_back(Anomaly{
+                .timestamp = info.lastUpdate,
+                .machineName = key.name,
+                .machineId = key.id,
+                .state = info.currentState,
+                .lastMessage = info.lastMessage,
+                .duration = std::chrono::milliseconds(lastTimestampMs - lastUpdateMs)
+            });
         }
     }
-}
-
-void Analyzer::printProgress() const {
-    std::cout << "\rProcessing logs: " << m_progress << "% complete" << std::flush;
 }
 
 } // namespace fsm

@@ -10,13 +10,11 @@ namespace fsm {
 
 class Analyzer {
 public:
-    Analyzer();
+    Analyzer() = default;
 
     void loadEndStates(const std::string& filename);
     void analyze(const std::string& logFile);
     const std::vector<Anomaly>& getAnomalies() const { return m_anomalies; }
-    int getProgress() const { return m_progress; }
-    void printProgress() const;
 
 private:
     void processStateChange(const ParseResult& result);
@@ -26,11 +24,11 @@ private:
     LogParser m_parser;
     std::unordered_map<MachineKey, MachineInfo, MachineKeyHash> m_machines;
     std::vector<Anomaly> m_anomalies;
+    std::string m_lastTimestamp;
 
     size_t m_totalLines = 0;
     size_t m_processedLines = 0;
     int m_progress = 0;
-    std::chrono::steady_clock::time_point m_lastProgressUpdate;
 };
 
 } // namespace fsm

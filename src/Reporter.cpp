@@ -7,9 +7,8 @@
 
 namespace fsm {
 
-std::string Reporter::formatDuration(std::chrono::milliseconds duration) {
+void Reporter::formatDuration(std::chrono::milliseconds duration, std::string& result) {
     auto ms = duration.count();
-
     auto hours = ms / 3600000;
     ms %= 3600000;
     auto minutes = ms / 60000;
@@ -17,45 +16,53 @@ std::string Reporter::formatDuration(std::chrono::milliseconds duration) {
     auto seconds = ms / 1000;
     auto millis = ms % 1000;
 
-    // Предварительно выделяем буфер
-    // Точный размер: 2+1+2+1+2+1+3 =12
-    std::string result;
-    result.reserve(12);
-
-    // Часы
-    result += (hours < 10 ? "0" : "") + std::to_string(hours);
-    result += ':';
-
-    // Минуты
-    result += (minutes < 10 ? "0" : "") + std::to_string(minutes);
-    result += ':';
-
-    // Секунды
-    result += (seconds < 10 ? "0" : "") + std::to_string(seconds);
+    result.push_back('0' + (hours / 10));
+    result.push_back('0' + (hours % 10));
+    result.push_back(':');
+    result.push_back('0' + (minutes / 10));
+    result.push_back('0' + (minutes % 10));
+    result.push_back(':');
+    result.push_back('0' + (seconds / 10));
+    result.push_back('0' + (seconds % 10));
     // Тут внимательно! Идет господин точка!
-    result += '.';
-
-    // Миллисекунды (всегда 3 цифры)
-    if (millis < 100) result += '0';
-    if (millis < 10) result += '0';
-    result += std::to_string(millis);
-
-    return result;
+    result.push_back('.');
+    result.push_back('0' + (millis / 100));
+    result.push_back('0' + ((millis / 10) % 10));
+    result.push_back('0' + (millis % 10));
 }
 
 std::string Reporter::generateCsv(const std::vector<Anomaly>& anomalies) {
-    std::ostringstream oss;
+    if (anomalies.empty()) return {};
 
-    for (const auto& anomaly : anomalies) {
-        oss << anomaly.timestamp << ","
-            << anomaly.machineName << ","
-            << anomaly.machineId << ","
-            << anomaly.state << ","
-            << anomaly.lastMessage << ","
-            << formatDuration(anomaly.duration) << "\n";
+    size_t estimatedSize = 0;
+
+    for (const auto& a : anomalies) {
+        estimatedSize += a.timestamp.size() + a.machineName.size()+a.state.size() + a.lastMessage.size() + 35;
     }
 
-    return oss.str();
+    std::string result;
+    result.reserve(estimatedSize);
+
+    char numBuffer[32];
+
+    for (const auto& a : anomalies) {
+        result += a.timestamp;
+        result += ',';
+        result += a.machineName;
+        result += ',';
+        // machineId идет целиком
+        result += std::to_string(a.machineId);
+        result += ',';
+        result += a.state;
+        result += ',';
+        result += a.lastMessage;
+        result += ',';
+
+        formatDuration(a.duration, result);
+        result += '\n';
+    }
+
+    return result;
 }
 
 void Reporter::saveToFile(const std::vector<Anomaly>& anomalies,

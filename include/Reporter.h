@@ -12,7 +12,7 @@ public:
     static void saveToFile(const std::vector<Anomaly>& anomalies, const std::string& filename);
 
 private:
-    static std::string formatDuration(std::chrono::milliseconds duration);
+    static void formatDuration(std::chrono::milliseconds duration, std::string& result);
 };
 
 } // namespace fsm

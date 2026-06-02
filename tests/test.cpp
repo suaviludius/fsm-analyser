@@ -50,10 +50,9 @@ TEST_F(FullPipelineTest, TestDataset1) {
 
     // 1. Запускаем анализатор
     fsm::Analyzer analyzer;
-    analyzer.loadEndStates(m_endStatesFile);
 
     // 2. Анализируем лог
-    ASSERT_NO_THROW(analyzer.analyze(m_logFile));
+    ASSERT_NO_THROW(analyzer.analyze(m_logFile, m_endStatesFile));
 
     // 3. Получаем аномалии
     const auto& anomalies = analyzer.getAnomalies();
@@ -108,12 +107,10 @@ TEST_F(FullPipelineTest, PerformanceTest) {
     size_t peakMemory = 0;
 
     fsm::Analyzer analyzer;
-    analyzer.loadEndStates(endStatesFile);
-    analyzer.analyze(largeLogFile);
+    analyzer.analyze(largeLogFile, endStatesFile);
 
     auto endTime = std::chrono::steady_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-        endTime - startTime);
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
 
     // Проверяем, что аномалии найдены
     auto anomalies = analyzer.getAnomalies();

@@ -15,7 +15,7 @@ ParseResult LogParser::parse(std::string_view line) {
 
     // один раз посчитали и хватит
     const size_t lineSize = line.size();
-    if (lineSize < 23) {
+    if (lineSize < 35 || !std::isdigit(line[0])) {
         return result;
     }
 
@@ -201,23 +201,56 @@ ParseResult LogParser::parse(std::string_view line) {
 }
 
 
+//Вызываем ТОЛЬКО для аномалий
 uint64_t LogParser::parseTimestamp(const std::string& ts) {
-    // Конвертируем строку "2026-01-12 09:07:02.345" в миллисекунды
-    // Используем mktime для точности - вызываем ТОЛЬКО для аномалий
-    std::tm tm = {};
-    std::istringstream ss(ts);
-    ss >> std::get_time(&tm, "%Y-%m-%d %H:%M:%S");
+    // Формат: "2026-01-12 09:07:02.345"
+    // Позиции: 01234567890123456789012
+    if (ts.size() < 23) return 0;
 
-    auto dotPos = ts.find('.');
-    int ms = 0;
-    if (dotPos != std::string::npos) {
-        ms = std::stoi(ts.substr(dotPos + 1));
+    const char* str = ts.data();
+
+    // Парсим год
+    int year = (str[0] - '0') * 1000 + (str[1] - '0') * 100 + (str[2] - '0') * 10 + (str[3] - '0');
+
+    // Парсим месяц
+    int month = (str[5] - '0') * 10 + (str[6] - '0');
+
+    // Парсим день
+    int day = (str[8] - '0') * 10 + (str[9] - '0');
+
+    // Парсим час
+    int hour = (str[11] - '0') * 10 + (str[12] - '0');
+
+    // Парсим минуту
+    int minute = (str[14] - '0') * 10 + (str[15] - '0');
+
+    // Парсим секунду
+    int second = (str[17] - '0') * 10 + (str[18] - '0');
+
+    // Парсим миллисекунды
+    int millis = (str[20] - '0') * 100 + (str[21] - '0') * 10 + (str[22] - '0');
+
+    // Быстрое преобразование в timestamp(чтобы расчитать разницы)
+    // Достаточно приблизительной точности в пределах одного файла
+    static const int monthDays[] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
+
+    int dayOfYear = monthDays[month - 1] + day;
+
+    // Проверка на високосный год (даты после февраля)
+    bool isLeap = (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
+    if (isLeap && month > 2) {
+        dayOfYear++;
     }
 
-    auto tp = std::chrono::system_clock::from_time_t(std::mktime(&tm));
-    tp += std::chrono::milliseconds(ms);
+    // Секунды с начала года (приблизительно, без учёта исторических високосных)
+    uint64_t seconds = (year - 1970) * 365 * 86400 +
+                       ((year - 1968) / 4) * 86400 +  // Приблизительная поправка на високосные
+                       (dayOfYear - 1) * 86400 +
+                       hour * 3600 +
+                       minute * 60 +
+                       second;
 
-    return std::chrono::duration_cast<std::chrono::milliseconds>(tp.time_since_epoch()).count();
+    return seconds * 1000 + millis;
 }
 
 void LogParser::loadEndStates(const std::string& filename) {

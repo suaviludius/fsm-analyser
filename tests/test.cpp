@@ -1,5 +1,4 @@
 #include "Analyzer.h"
-#include "Reporter.h"
 
 #include <gtest/gtest.h>
 
@@ -52,13 +51,10 @@ TEST_F(FullPipelineTest, TestDataset1) {
     fsm::Analyzer analyzer;
 
     // 2. Анализируем лог
-    ASSERT_NO_THROW(analyzer.analyze(m_logFile, m_endStatesFile));
+    ASSERT_NO_THROW(analyzer.analyze(m_logFile, m_endStatesFile, m_actualOutputFile));
 
-    // 3. Получаем аномалии
-    const auto& anomalies = analyzer.getAnomalies();
-
-    // 4. Сохраняем результат
-    fsm::Reporter::saveToFile(anomalies, m_actualOutputFile);
+    // 3. Получаем количество аномалии
+    const auto& anomalies = analyzer.getAnomaliesCount();
 
     // 5. Сравниваем с ожидаемым результатом
     std::string expected = readFile(m_expectedOutputFile);
@@ -107,14 +103,14 @@ TEST_F(FullPipelineTest, PerformanceTest) {
     size_t peakMemory = 0;
 
     fsm::Analyzer analyzer;
-    analyzer.analyze(largeLogFile, endStatesFile);
+    analyzer.analyze(largeLogFile, endStatesFile, m_actualOutputFile);
 
     auto endTime = std::chrono::steady_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
 
     // Проверяем, что аномалии найдены
-    auto anomalies = analyzer.getAnomalies();
-    EXPECT_EQ(anomalies.size(), 10000);  // Все 10000 машин зависли
+    auto anomalies = analyzer.getAnomaliesCount();
+    EXPECT_EQ(anomalies, 10000);  // Все 10000 машин зависли
 
     // Проверяем производительность (должно быть быстро)
     EXPECT_LT(duration.count(), 2000);  // Меньше 2 секунд для 10000 записей

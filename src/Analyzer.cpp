@@ -122,6 +122,13 @@ Analyzer::ThreadResult Analyzer::processChunk(
 
 // Мержить результаты будем после отработки потоков
 void Analyzer::mergeResults(std::vector<ThreadResult>& results) {
+    // Выделяем память заранее
+    size_t totalSize = 0;
+    for (auto& result : results) {
+        totalSize += result.machines.size();
+    }
+    m_machines.reserve(m_machines.size() + totalSize);
+
     // Результаты идут в последовательном порядке чтения из файлов
     // то есть вначале будут те результаты, что соответсвуют началу файла, дальше - ниже
     for (auto& result : results) {
@@ -132,13 +139,13 @@ void Analyzer::mergeResults(std::vector<ThreadResult>& results) {
 
         // Объединение мап- для каждого потока
         for (auto& [key, info] : result.machines) {
-            m_machines[std::move(key)] = std::move(info);
+            m_machines[key] = std::move(info);
         }
     }
 }
 
 
-void Analyzer::analyze(const std::string& logFile, const std::string& endStatesFile) {
+void Analyzer::analyze(const std::string& logFile, const std::string& endStatesFile, const std::string& outputFile) {
     // Загружаем конечные состояния
     m_parser.loadEndStates(endStatesFile);
 
@@ -156,13 +163,29 @@ void Analyzer::analyze(const std::string& logFile, const std::string& endStatesF
     }
     size_t fileSize = sb.st_size;
 
+    //auto start = std::chrono::steady_clock::now();
+
     // Мапим файл в память (СУПЕР ОЧЕНЬ БЫСТРО)
     char* data = (char*)mmap(nullptr, fileSize, PROT_READ, MAP_PRIVATE, fd, 0);
+    // Этот системный вызов говорит ОС, что мы будем читать ВЕСЬ файл последовательно
+    // и ОС должна читать его в фоне
+    madvise(data, fileSize, MADV_WILLNEED | MADV_SEQUENTIAL);
     close(fd);
 
     if (data == MAP_FAILED) {
         throw std::runtime_error("mmap failed");
     }
+
+    // Принудительно трогаем каждую страницу (для теста)
+    //for (size_t i = 0; i < fileSize; i += 4096) {
+    //    volatile char c = data[i];
+    //    (void)c;
+    //}
+    //auto loadTime = std::chrono::steady_clock::now();
+
+    //std::cout << "Load to page cache: " 
+    //        << std::chrono::duration_cast<std::chrono::milliseconds>(loadTime - start).count()
+    //        << " ms\n";
 
     // Если у нас файл > 500 Мб, то делим, иначе играемся в одном
     int numThreads = 0;
@@ -231,8 +254,9 @@ void Analyzer::analyze(const std::string& logFile, const std::string& endStatesF
               << "\n  seconds: " << duration.count()
               << "\n  speed: " << fileSize/(1024 * 1024)/std::max(1,(int)duration.count()) << "MB/s" << std::endl;;
 
+
     // Проверка на зависшие FSM
-    detectStuckMachines();
+    detectStuckMachines(outputFile);
 }
 
 void Analyzer::processStateChange(const ParseResult& result,
@@ -256,33 +280,64 @@ void Analyzer::processMessage(const ParseResult& result, std::unordered_map<Mach
     info.isTerminal = m_parser.isTerminalState(info.currentState, key.name);
 }
 
-void Analyzer::detectStuckMachines() {
+void Analyzer::detectStuckMachines(const std::string& outputFile) {
+    std::ofstream file(outputFile, std::ios::out | std::ios::binary);
+    if (!file.is_open()) {
+        throw std::runtime_error("Cannot create output file: " + outputFile);
+    }
+
+    // Устанавливаем буффер для файлового потока в user-space
+    // Это поможет избежать многозатратных системных вызовов
+    const size_t FILE_BUFFER_SIZE = 64 * 1024 * 1024; // 64 MB
+    std::vector<char> fileBuffer(FILE_BUFFER_SIZE);
+    file.rdbuf()->pubsetbuf(fileBuffer.data(), fileBuffer.size());
+
     // Есть ли хоть один timestamp?
     if (m_machines.empty() || m_lastTimestamp.empty()) {
         return;
     }
 
+    // Аномалии делаем строками чтобы сразу выводить их в файл
+    std::string anomalies;
+    // Делаем локальный буффер не для всех записей, а для части, чтобы выводить по частям
+    anomalies.reserve(128 * 1024); // 128 KB
+
     // Парсим последний timestamp один раз
     uint64_t lastTimestampMs = m_parser.parseTimestamp(m_lastTimestamp);
-
-    // Верим в худшее, примерно половина машин - аномалии
-    m_anomalies.clear();
-    m_anomalies.reserve(m_machines.size() / 2);
 
     for (const auto& [key, info] : m_machines) {
         if (!info.isTerminal) {
             // Парсим lastUpdate ТОЛЬКО для аномалии
             uint64_t lastUpdateMs = m_parser.parseTimestamp(info.lastUpdate);
+            std::chrono::milliseconds duration = std::chrono::milliseconds(lastTimestampMs - lastUpdateMs);
 
-            m_anomalies.emplace_back(Anomaly{
-                .timestamp = info.lastUpdate,
-                .machineName = key.name,
-                .machineId = key.id,
-                .state = info.currentState,
-                .lastMessage = info.lastMessage,
-                .duration = std::chrono::milliseconds(lastTimestampMs - lastUpdateMs)
-            });
+            anomalies += info.lastUpdate;
+            anomalies += ',';
+            anomalies += key.name;
+            anomalies += ',';
+            // machineId идет целиком
+            anomalies += std::to_string(key.id);
+            anomalies += ',';
+            anomalies += info.currentState;
+            anomalies += ',';
+            anomalies += info.lastMessage;
+            anomalies += ',';
+            LogParser::formatDuration(duration, anomalies);
+            anomalies += '\n';
+
+            ++m_anomaliesCount;
+
+            // Сброс при заполнении
+            if (anomalies.size() > 1000000) { // 1 MB
+                file << anomalies;
+                anomalies.clear();
+            }
         }
+    }
+
+    // Финальный сброс
+    if (!anomalies.empty()) {
+        file << anomalies;
     }
 }
 

@@ -13,10 +13,11 @@ class Analyzer {
 public:
     Analyzer() = default;
 
-    void analyze(const std::string& logFile, const std::string& endStatesFile);
+    // Выполнение анализа состояний лог файла
+    void analyze(const std::string& logFile, const std::string& endStatesFile, const std::string& outputFile);
 
     const auto& getMachines() const { return m_machines; }
-    const auto& getAnomalies() const { return m_anomalies; }
+    const auto& getAnomaliesCount() const { return m_anomaliesCount; }
 
 private:
     // Структура для обработки машинных состояний внутри разных потоков
@@ -37,11 +38,11 @@ private:
     // Объединение результатов поиска машинных состояний из нескольких потоков
     void mergeResults(std::vector<ThreadResult>& results);
 
-    // Определитель аномалий в m_machines
-    void detectStuckMachines();
+    // Определитель аномалий в m_machines (RVO)
+    void detectStuckMachines(const std::string& outputFile);
 
     std::unordered_map<MachineKey, MachineInfo, MachineKeyHash> m_machines;
-    std::vector<Anomaly> m_anomalies;
+    size_t m_anomaliesCount = 0;
     LogParser m_parser;
 
     std::string m_lastTimestamp;

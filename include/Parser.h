@@ -48,7 +48,10 @@ public:
     void loadEndStates(const std::string& filename);
 
     // Парсинг времени std::string -> std::chrono.count()
-    uint64_t parseTimestamp(const std::string& timestampStr);
+    static uint64_t parseTimestamp(const std::string& timestampStr);
+
+    // Парсинг duration формата в string timestamp
+    static void formatDuration(std::chrono::milliseconds duration, std::string& result);
 
 private:
 

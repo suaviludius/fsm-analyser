@@ -253,6 +253,30 @@ uint64_t LogParser::parseTimestamp(const std::string& ts) {
     return seconds * 1000 + millis;
 }
 
+void LogParser::formatDuration(std::chrono::milliseconds duration, std::string& result) {
+    auto ms = duration.count();
+    auto hours = ms / 3600000;
+    ms %= 3600000;
+    auto minutes = ms / 60000;
+    ms %= 60000;
+    auto seconds = ms / 1000;
+    auto millis = ms % 1000;
+
+    result.push_back('0' + (hours / 10));
+    result.push_back('0' + (hours % 10));
+    result.push_back(':');
+    result.push_back('0' + (minutes / 10));
+    result.push_back('0' + (minutes % 10));
+    result.push_back(':');
+    result.push_back('0' + (seconds / 10));
+    result.push_back('0' + (seconds % 10));
+    // Тут внимательно! Идет господин точка!
+    result.push_back('.');
+    result.push_back('0' + (millis / 100));
+    result.push_back('0' + ((millis / 10) % 10));
+    result.push_back('0' + (millis % 10));
+}
+
 void LogParser::loadEndStates(const std::string& filename) {
     std::ifstream file(filename);
     if (!file.is_open()) {

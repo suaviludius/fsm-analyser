@@ -9,7 +9,6 @@ add_executable(fsm_analyzer
     ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Parser.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Analyzer.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/Reporter.cpp
 )
 
 target_include_directories(fsm_analyzer PUBLIC include)
@@ -38,7 +37,6 @@ if(BUILD_TEST)
         ${CMAKE_SOURCE_DIR}/src/Analyzer.cpp
         ${CMAKE_SOURCE_DIR}/src/Parser.cpp
         ${CMAKE_SOURCE_DIR}/src/Analyzer.cpp
-        ${CMAKE_SOURCE_DIR}/src/Reporter.cpp
     )
     target_link_libraries(run_tests PRIVATE GTest::gtest_main)
     target_include_directories(run_tests PUBLIC

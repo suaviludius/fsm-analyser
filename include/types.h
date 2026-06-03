@@ -34,14 +34,4 @@ struct MachineInfo {
     bool isTerminal = false;
 };
 
-// Аномалия
-struct Anomaly {
-    std::string timestamp;
-    std::string machineName;
-    uint64_t machineId;
-    std::string state;
-    std::string lastMessage;
-    std::chrono::milliseconds duration;  // миллисекунды для точности
-};
-
 } // namespace fsm

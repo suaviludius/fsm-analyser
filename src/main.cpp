@@ -3,7 +3,6 @@
  * (C) PROTEI protei.ru
  */
 #include "Analyzer.h"
-#include "Reporter.h"
 
 #include <iostream>
 #include <chrono>
@@ -26,19 +25,16 @@ int main(int argc, char* argv[]) {
         fsm::Analyzer analyzer;
 
         // Анализируем лог
-        analyzer.analyze(logFile, endStatesFile);
+        analyzer.analyze(logFile, endStatesFile, outputFile);
 
         // Получаем аномалии
-        const auto& anomalies = analyzer.getAnomalies();
-
-        // Сохраняем отчет
-        fsm::Reporter::saveToFile(anomalies, outputFile);
+        const auto& anomaliesCount = analyzer.getAnomaliesCount();
 
         auto endTime = std::chrono::steady_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
 
         std::cout << "\nAnalysis complete\n"
-                  << "\n  found anomalies: " << anomalies.size()
+                  << "\n  found anomalies: " << anomaliesCount
                   << "\n  report saved to: " << outputFile
                   << "\n  time taken: " << duration.count() << " ms" << std::endl;
 
